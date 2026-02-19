@@ -38,6 +38,7 @@ chrono = { version = "0.4", features = ["serde"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 async-stream = "0.3"
 anyhow = "1"
+eventsource-stream = "0.2.3"
 
 [dev-dependencies]
 tokio-test = "0.4"

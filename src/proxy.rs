@@ -16,6 +16,7 @@ use crate::translate::response::{openai_error_to_anthropic, openai_to_anthropic}
 use crate::translate::streaming::StreamTranslator;
 
 use bytes::Bytes;
+use eventsource_stream::Eventsource;
 use futures::stream::{self, Stream};
 #[allow(unused_imports)]
 use futures::StreamExt;
@@ -67,13 +68,19 @@ pub async fn proxy_non_streaming(
     let body = serde_json::to_vec(&openai_req)
         .map_err(|e| ProxyError::translation(format!("Failed to serialize request: {e}")))?;
 
-    let response = send_with_retry(client, &url, &api_key, &body, logger).await?;
+    let response = send_with_retry(
+        client,
+        &url,
+        &api_key,
+        &body,
+        logger,
+    )
+    .await?;
 
     let status = response.status().as_u16();
-    let resp_body = response
-        .text()
-        .await
-        .map_err(|e| ProxyError::provider(format!("Failed to read response body: {e}")))?;
+    let resp_body = response.text().await.map_err(|e| {
+        ProxyError::provider(format!("Failed to read response body: {e}"))
+    })?;
 
     logger.debug(
         "proxy",
@@ -95,15 +102,16 @@ pub async fn proxy_non_streaming(
         return Ok(ProxyResult::Error(anthropic_err, status));
     }
 
-    let openai_resp: ChatCompletionResponse = serde_json::from_str(&resp_body).map_err(|e| {
-        ProxyError::translation(format!(
-            "Failed to parse provider response: {}. Body: {}",
-            e,
-            truncate(&resp_body, 300)
-        ))
-    })?;
+    let openai_resp: ChatCompletionResponse =
+        serde_json::from_str(&resp_body).map_err(|e| {
+            ProxyError::translation(format!(
+                "Failed to parse provider response: {}. Body: {}",
+                e,
+                truncate(&resp_body, 300)
+            ))
+        })?;
 
-    let anthropic_resp = openai_to_anthropic(&openai_resp, &req.model);
+    let anthropic_resp = openai_to_anthropic(&openai_resp, &req.model)?;
 
     logger.info(
         "proxy",
@@ -155,11 +163,7 @@ pub async fn proxy_streaming(
         let body = response.text().await.unwrap_or_default();
         logger.warn(
             "proxy",
-            format!(
-                "Streaming error status={}: {}",
-                status,
-                truncate(&body, 300)
-            ),
+            format!("Streaming error status={}: {}", status, truncate(&body, 300)),
         );
 
         let error_event = if let Ok(err) = serde_json::from_str::<ChatErrorResponse>(&body) {
@@ -194,67 +198,47 @@ fn sse_translate_stream(
 ) -> impl Stream<Item = std::result::Result<SseEvent, std::io::Error>> + Send + 'static {
     async_stream::stream! {
         let mut translator = StreamTranslator::new(&model);
-        let mut buffer = String::new();
+        let event_stream = byte_stream.eventsource();
 
-        tokio::pin!(byte_stream);
+        tokio::pin!(event_stream);
 
-        while let Some(chunk_result) = byte_stream.next().await {
-            let chunk = match chunk_result {
-                Ok(c) => c,
+        while let Some(event_result) = event_stream.next().await {
+            let event = match event_result {
+                Ok(e) => e,
                 Err(e) => {
                     logger.error("stream", format!("Byte stream error: {e}"));
                     break;
                 }
             };
 
-            buffer.push_str(&String::from_utf8_lossy(&chunk));
-
-            while let Some(newline_pos) = buffer.find('\n') {
-                let line = buffer[..newline_pos].trim().to_string();
-                buffer = buffer[newline_pos + 1..].to_string();
-
-                if line.is_empty() {
-                    continue;
-                }
-
-                let data = if let Some(stripped) = line.strip_prefix("data: ") {
-                    stripped.trim()
-                } else if let Some(stripped) = line.strip_prefix("data:") {
-                    stripped.trim()
-                } else {
-                    // Skip non-data SSE lines (event:, id:, retry:, comments)
-                    continue;
-                };
-
-                if data == "[DONE]" {
-                    let events = translator.finish();
-                    for event in events {
-                        if let Ok(json) = serde_json::to_string(&event) {
-                            yield Ok(SseEvent {
-                                event: event.event_name().to_string(),
-                                data: json,
-                            });
-                        }
-                    }
-                    break;
-                }
-
-                let chunk: ChatCompletionChunk = match serde_json::from_str(data) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        logger.debug("stream", format!("Skipping unparseable chunk: {e}"));
-                        continue;
-                    }
-                };
-
-                let events = translator.process_chunk(&chunk);
-                for event in events {
-                    if let Ok(json) = serde_json::to_string(&event) {
+            if event.data == "[DONE]" {
+                let events = translator.finish();
+                for e in events {
+                    if let Ok(json) = serde_json::to_string(&e) {
                         yield Ok(SseEvent {
-                            event: event.event_name().to_string(),
+                            event: e.event_name().to_string(),
                             data: json,
                         });
                     }
+                }
+                break;
+            }
+
+            let chunk: ChatCompletionChunk = match serde_json::from_str(&event.data) {
+                Ok(c) => c,
+                Err(e) => {
+                    logger.debug("stream", format!("Skipping unparseable chunk: {e}"));
+                    continue;
+                }
+            };
+
+            let events = translator.process_chunk(&chunk);
+            for e in events {
+                if let Ok(json) = serde_json::to_string(&e) {
+                    yield Ok(SseEvent {
+                        event: e.event_name().to_string(),
+                        data: json,
+                    });
                 }
             }
         }

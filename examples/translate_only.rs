@@ -53,7 +53,10 @@ fn main() {
     };
 
     // Translate to OpenAI format
-    let model_map = HashMap::from([("claude-sonnet-4-20250514".to_string(), "gpt-4o".to_string())]);
+    let model_map = HashMap::from([(
+        "claude-sonnet-4-20250514".to_string(),
+        "gpt-4o".to_string(),
+    )]);
 
     let openai_req = anthropic_to_openai(&anthropic_req, &model_map);
 
@@ -83,7 +86,7 @@ fn main() {
         }),
     };
 
-    let anthropic_resp = openai_to_anthropic(&openai_resp, "claude-sonnet-4-20250514");
+    let anthropic_resp = openai_to_anthropic(&openai_resp, "claude-sonnet-4-20250514").unwrap();
 
     println!();
     println!("=== Translated Response (Anthropic format) ===");

@@ -3,15 +3,21 @@
 //! Handles text content, tool calls, finish reason mapping, usage statistics,
 //! and error translation. Supports `reasoning_content` from reasoning models.
 
-use super::anthropic_types::{ErrorResponse, MessagesResponse, ResponseContentBlock, Usage};
+use crate::error::ProxyError;
+use super::anthropic_types::{
+    ErrorResponse, MessagesResponse, ResponseContentBlock, Usage,
+};
 use super::openai_types::{ChatCompletionResponse, ChatErrorResponse};
 
 /// Translate an `OpenAI` Chat Completion response into an Anthropic Messages response.
 /// Pure function: `original_model` is what Claude Code originally requested.
+///
+/// # Errors
+/// Returns `ProxyError::Translation` if tool call arguments are invalid JSON.
 pub fn openai_to_anthropic(
     resp: &ChatCompletionResponse,
     original_model: &str,
-) -> MessagesResponse {
+) -> Result<MessagesResponse, ProxyError> {
     let choice = resp.choices.first();
 
     let mut content: Vec<ResponseContentBlock> = Vec::new();
@@ -24,23 +30,21 @@ pub fn openai_to_anthropic(
             .content
             .as_deref()
             .filter(|s| !s.is_empty())
-            .or_else(|| {
-                c.message
-                    .reasoning_content
-                    .as_deref()
-                    .filter(|s| !s.is_empty())
-            });
+            .or_else(|| c.message.reasoning_content.as_deref().filter(|s| !s.is_empty()));
 
         if let Some(text) = text {
-            content.push(ResponseContentBlock::Text {
-                text: text.to_string(),
-            });
+            content.push(ResponseContentBlock::Text { text: text.to_string() });
         }
 
         if let Some(ref tool_calls) = c.message.tool_calls {
             for tc in tool_calls {
                 let input: serde_json::Value =
-                    serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::Value::Null);
+                    serde_json::from_str(&tc.function.arguments).map_err(|e| {
+                        ProxyError::translation(format!(
+                            "Invalid JSON in tool call '{}' arguments: {e}",
+                            tc.function.name
+                        ))
+                    })?;
 
                 content.push(ResponseContentBlock::ToolUse {
                     id: tc.id.clone(),
@@ -59,8 +63,7 @@ pub fn openai_to_anthropic(
     }
 
     let stop_reason = choice
-        .and_then(|c| c.finish_reason.as_deref())
-        .map_or_else(|| "end_turn".to_string(), map_finish_reason);
+        .and_then(|c| c.finish_reason.as_deref()).map_or_else(|| "end_turn".to_string(), map_finish_reason);
 
     let usage = resp.usage.as_ref().map_or_else(Usage::default, |u| Usage {
         input_tokens: u.prompt_tokens,
@@ -72,7 +75,7 @@ pub fn openai_to_anthropic(
     // Use the OpenAI response ID, prefixed to look like an Anthropic ID
     let id = format!("msg_{}", resp.id.trim_start_matches("chatcmpl-"));
 
-    MessagesResponse {
+    Ok(MessagesResponse {
         id,
         response_type: "message".to_string(),
         role: "assistant".to_string(),
@@ -81,7 +84,7 @@ pub fn openai_to_anthropic(
         stop_reason: Some(stop_reason),
         stop_sequence: None,
         usage,
-    }
+    })
 }
 
 /// Map `OpenAI` `finish_reason` to Anthropic `stop_reason`
@@ -97,7 +100,7 @@ pub fn map_finish_reason(reason: &str) -> String {
 }
 
 /// Translate an `OpenAI` error into an Anthropic error response
-#[must_use]
+#[must_use] 
 pub fn openai_error_to_anthropic(err: &ChatErrorResponse) -> ErrorResponse {
     let error_type = match err.error.error_type.as_str() {
         "invalid_request_error" => "invalid_request_error",
@@ -113,10 +116,7 @@ mod tests {
     use super::*;
     use crate::translate::openai_types::*;
 
-    fn make_response(
-        content: Option<String>,
-        finish_reason: Option<String>,
-    ) -> ChatCompletionResponse {
+    fn make_response(content: Option<String>, finish_reason: Option<String>) -> ChatCompletionResponse {
         ChatCompletionResponse {
             id: "chatcmpl-abc123".to_string(),
             object: "chat.completion".to_string(),
@@ -143,7 +143,7 @@ mod tests {
     #[test]
     fn test_simple_text_response() {
         let resp = make_response(Some("Hello!".to_string()), Some("stop".to_string()));
-        let result = openai_to_anthropic(&resp, "claude-sonnet-4-20250514");
+        let result = openai_to_anthropic(&resp, "claude-sonnet-4-20250514").unwrap();
 
         assert_eq!(result.role, "assistant");
         assert_eq!(result.model, "claude-sonnet-4-20250514");
@@ -187,7 +187,7 @@ mod tests {
             usage: None,
         };
 
-        let result = openai_to_anthropic(&resp, "test-model");
+        let result = openai_to_anthropic(&resp, "test-model").unwrap();
 
         assert_eq!(result.content.len(), 2);
         assert_eq!(result.stop_reason, Some("tool_use".to_string()));

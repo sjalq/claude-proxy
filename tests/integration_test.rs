@@ -26,7 +26,10 @@ fn fireworks_config() -> ProxyConfig {
         },
         models,
         params: ParamsConfig {
-            drop: vec!["betas".to_string(), "context_management".to_string()],
+            drop: vec![
+                "betas".to_string(),
+                "context_management".to_string(),
+            ],
         },
     }
 }
@@ -70,9 +73,7 @@ fn tool_request() -> MessagesRequest {
         max_tokens: 200,
         messages: vec![Message {
             role: Role::User,
-            content: MessageContent::Text(
-                "What's the weather in London? Use the get_weather tool.".to_string(),
-            ),
+            content: MessageContent::Text("What's the weather in London? Use the get_weather tool.".to_string()),
         }],
         system: None,
         stream: None,
@@ -114,7 +115,10 @@ fn tool_request() -> MessagesRequest {
 fn test_request_translation_roundtrip() {
     let req = simple_request("claude-sonnet-4-20250514", "Hello");
     let mut model_map = HashMap::new();
-    model_map.insert("claude-sonnet-4-20250514".to_string(), "gpt-4o".to_string());
+    model_map.insert(
+        "claude-sonnet-4-20250514".to_string(),
+        "gpt-4o".to_string(),
+    );
 
     let openai_req = claude_proxy::translate::request::anthropic_to_openai(&req, &model_map);
 
@@ -125,36 +129,36 @@ fn test_request_translation_roundtrip() {
     assert_eq!(openai_req.max_tokens, Some(50));
 }
 
-#[test]
-fn test_response_translation() {
-    use claude_proxy::translate::openai_types::*;
-    use claude_proxy::translate::response::openai_to_anthropic;
+    #[test]
+    fn test_response_translation() {
+        use claude_proxy::translate::openai_types::*;
+        use claude_proxy::translate::response::openai_to_anthropic;
 
-    let openai_resp = ChatCompletionResponse {
-        id: "chatcmpl-test".to_string(),
-        object: "chat.completion".to_string(),
-        created: 12345,
-        model: "gpt-4o".to_string(),
-        choices: vec![Choice {
-            index: 0,
-            message: ChoiceMessage {
-                role: "assistant".to_string(),
-                content: Some("Hello there!".to_string()),
-                reasoning_content: None,
-                tool_calls: None,
-            },
-            finish_reason: Some("stop".to_string()),
-        }],
-        usage: Some(ChatUsage {
-            prompt_tokens: 5,
-            completion_tokens: 3,
-            total_tokens: 8,
-        }),
-    };
+        let openai_resp = ChatCompletionResponse {
+            id: "chatcmpl-test".to_string(),
+            object: "chat.completion".to_string(),
+            created: 12345,
+            model: "gpt-4o".to_string(),
+            choices: vec![Choice {
+                index: 0,
+                message: ChoiceMessage {
+                    role: "assistant".to_string(),
+                    content: Some("Hello there!".to_string()),
+                    reasoning_content: None,
+                    tool_calls: None,
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: Some(ChatUsage {
+                prompt_tokens: 5,
+                completion_tokens: 3,
+                total_tokens: 8,
+            }),
+        };
 
-    let result = openai_to_anthropic(&openai_resp, "claude-sonnet-4-20250514");
+        let result = openai_to_anthropic(&openai_resp, "claude-sonnet-4-20250514").unwrap();
 
-    assert_eq!(result.response_type, "message");
+        assert_eq!(result.response_type, "message");
     assert_eq!(result.role, "assistant");
     assert_eq!(result.model, "claude-sonnet-4-20250514");
     assert_eq!(result.stop_reason, Some("end_turn".to_string()));
@@ -211,6 +215,7 @@ fn test_stream_translator_basic() {
 #[tokio::test]
 #[ignore = "requires FIREWORKS_API_KEY"]
 async fn test_non_streaming_fireworks() {
+
     let config = fireworks_config();
     let client = reqwest::Client::new();
     let logger = SharedLogger::new("/tmp/claude-proxy-test.log").unwrap();
@@ -241,6 +246,7 @@ async fn test_non_streaming_fireworks() {
 #[tokio::test]
 #[ignore = "requires FIREWORKS_API_KEY"]
 async fn test_streaming_fireworks() {
+
     let config = fireworks_config();
     let client = reqwest::Client::new();
     let logger = SharedLogger::new("/tmp/claude-proxy-test-stream.log").unwrap();
@@ -279,6 +285,7 @@ async fn test_streaming_fireworks() {
 #[tokio::test]
 #[ignore = "requires FIREWORKS_API_KEY"]
 async fn test_tool_use_fireworks() {
+
     let config = fireworks_config();
     let client = reqwest::Client::new();
     let logger = SharedLogger::new("/tmp/claude-proxy-test-tools.log").unwrap();
@@ -290,10 +297,9 @@ async fn test_tool_use_fireworks() {
         Ok(proxy::ProxyResult::Success(resp)) => {
             println!("Tool response: {:?}", resp.content);
 
-            let has_tool_use = resp
-                .content
-                .iter()
-                .any(|b| matches!(b, ResponseContentBlock::ToolUse { .. }));
+            let has_tool_use = resp.content.iter().any(|b| {
+                matches!(b, ResponseContentBlock::ToolUse { .. })
+            });
 
             // The model may or may not call the tool - just verify we got a valid response
             assert_eq!(resp.response_type, "message");
@@ -316,6 +322,7 @@ async fn test_tool_use_fireworks() {
 #[tokio::test]
 #[ignore = "requires FIREWORKS_API_KEY"]
 async fn test_full_server_roundtrip() {
+
     let config = fireworks_config();
     let logger = SharedLogger::new("/tmp/claude-proxy-test-server.log").unwrap();
     let client = reqwest::Client::new();
@@ -327,7 +334,9 @@ async fn test_full_server_roundtrip() {
     });
 
     let app = claude_proxy::build_router(state);
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap();
     let addr = listener.local_addr().unwrap();
 
     tokio::spawn(async move {
