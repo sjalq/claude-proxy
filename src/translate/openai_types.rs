@@ -145,6 +145,9 @@ pub struct ChoiceMessage {
     pub role: String,
     #[serde(default)]
     pub content: Option<String>,
+    /// Reasoning/thinking content (Kimi K2.5, DeepSeek R1, etc.)
+    #[serde(default)]
+    pub reasoning_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ChatToolCall>>,
 }
@@ -188,6 +191,9 @@ pub struct ChunkDelta {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
+    /// Reasoning/thinking tokens (used by Kimi K2.5, DeepSeek R1, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ChunkToolCall>>,
 }

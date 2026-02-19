@@ -79,26 +79,40 @@ impl StreamTranslator {
             None => return events,
         };
 
-        // Handle text content deltas
-        if let Some(ref content) = choice.delta.content {
-            if !content.is_empty() {
-                if !self.in_text_block {
-                    events.push(StreamEvent::ContentBlockStart {
-                        index: self.content_block_index,
-                        content_block: ResponseContentBlock::Text {
-                            text: String::new(),
-                        },
-                    });
-                    self.in_text_block = true;
-                }
+        // Handle text content deltas.
+        // Some reasoning models (Kimi K2.5, DeepSeek R1) stream chain-of-thought
+        // in `reasoning_content` and the final answer in `content`. We emit both
+        // as text deltas so Claude Code sees the full response.
+        let effective_content = choice
+            .delta
+            .content
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                choice
+                    .delta
+                    .reasoning_content
+                    .as_deref()
+                    .filter(|s| !s.is_empty())
+            });
 
-                events.push(StreamEvent::ContentBlockDelta {
+        if let Some(content) = effective_content {
+            if !self.in_text_block {
+                events.push(StreamEvent::ContentBlockStart {
                     index: self.content_block_index,
-                    delta: Delta::TextDelta {
-                        text: content.clone(),
+                    content_block: ResponseContentBlock::Text {
+                        text: String::new(),
                     },
                 });
+                self.in_text_block = true;
             }
+
+            events.push(StreamEvent::ContentBlockDelta {
+                index: self.content_block_index,
+                delta: Delta::TextDelta {
+                    text: content.to_string(),
+                },
+            });
         }
 
         // Handle tool call deltas
@@ -276,6 +290,7 @@ mod tests {
                 delta: ChunkDelta {
                     role: None,
                     content: Some(content.to_string()),
+                    reasoning_content: None,
                     tool_calls: None,
                 },
                 finish_reason: finish.map(String::from),
@@ -328,6 +343,7 @@ mod tests {
                 delta: ChunkDelta {
                     role: None,
                     content: None,
+                    reasoning_content: None,
                     tool_calls: Some(vec![ChunkToolCall {
                         index: 0,
                         id: Some("call_abc".to_string()),

@@ -149,6 +149,7 @@ fn test_response_translation() {
             message: ChoiceMessage {
                 role: "assistant".to_string(),
                 content: Some("Hello there!".to_string()),
+                reasoning_content: None,
                 tool_calls: None,
             },
             finish_reason: Some("stop".to_string()),
@@ -187,6 +188,7 @@ fn test_stream_translator_basic() {
             delta: ChunkDelta {
                 role: Some("assistant".to_string()),
                 content: Some("Hi".to_string()),
+                reasoning_content: None,
                 tool_calls: None,
             },
             finish_reason: None,

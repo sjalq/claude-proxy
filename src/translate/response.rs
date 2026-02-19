@@ -14,10 +14,17 @@ pub fn openai_to_anthropic(
     let mut content: Vec<ResponseContentBlock> = Vec::new();
 
     if let Some(c) = choice {
-        if let Some(ref text) = c.message.content {
-            if !text.is_empty() {
-                content.push(ResponseContentBlock::Text { text: text.clone() });
-            }
+        // Use content if available, otherwise fall back to reasoning_content
+        // (reasoning models like Kimi K2.5 may put the response there)
+        let text = c
+            .message
+            .content
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .or_else(|| c.message.reasoning_content.as_deref().filter(|s| !s.is_empty()));
+
+        if let Some(text) = text {
+            content.push(ResponseContentBlock::Text { text: text.to_string() });
         }
 
         if let Some(ref tool_calls) = c.message.tool_calls {
@@ -107,6 +114,7 @@ mod tests {
                 message: ChoiceMessage {
                     role: "assistant".to_string(),
                     content,
+                    reasoning_content: None,
                     tool_calls: None,
                 },
                 finish_reason,
@@ -151,6 +159,7 @@ mod tests {
                 message: ChoiceMessage {
                     role: "assistant".to_string(),
                     content: Some("Let me check.".to_string()),
+                    reasoning_content: None,
                     tool_calls: Some(vec![ChatToolCall {
                         id: "call_abc".to_string(),
                         call_type: "function".to_string(),
