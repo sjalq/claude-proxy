@@ -57,6 +57,9 @@ fn default_drop_params() -> Vec<String> {
 
 impl ProxyConfig {
     /// Load config from a TOML file, falling back to defaults.
+    ///
+    /// # Errors
+    /// Returns `ProxyError::Config` if the file can't be read or parsed.
     pub fn load(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path).map_err(|e| {
             ProxyError::config(format!(
@@ -70,7 +73,10 @@ impl ProxyConfig {
     }
 
     /// Search standard locations for a config file.
-    /// Priority: CLI arg > CWD > XDG config > home dir
+    /// Priority: CLI arg > CWD > XDG config > home dir.
+    ///
+    /// # Errors
+    /// Returns `ProxyError::Config` if no config file is found or it can't be parsed.
     pub fn find_and_load(explicit_path: Option<&Path>) -> Result<Self> {
         if let Some(path) = explicit_path {
             return Self::load(path);
@@ -94,7 +100,10 @@ impl ProxyConfig {
         )))
     }
 
-    /// Resolve the effective base URL (config override or provider preset default)
+    /// Resolve the effective base URL (config override or provider preset default).
+    ///
+    /// # Errors
+    /// Returns `ProxyError::Config` if the provider is unknown and no `base_url` is set.
     pub fn effective_base_url(&self) -> Result<String> {
         if let Some(ref url) = self.provider.base_url {
             return Ok(url.clone());
@@ -112,7 +121,10 @@ impl ProxyConfig {
         Ok(preset.base_url.to_string())
     }
 
-    /// Resolve the API key from the configured environment variable
+    /// Resolve the API key from the configured environment variable.
+    ///
+    /// # Errors
+    /// Returns `ProxyError::Config` if the environment variable is not set.
     pub fn resolve_api_key(&self) -> Result<String> {
         std::env::var(&self.provider.api_key_env).map_err(|_| {
             ProxyError::config(format!(
@@ -122,15 +134,14 @@ impl ProxyConfig {
         })
     }
 
-    /// Whether this provider uses the Anthropic format (passthrough) vs OpenAI format
+    /// Whether this provider uses the Anthropic format (passthrough) vs `OpenAI` format.
+    #[must_use]
     pub fn is_anthropic_format(&self) -> bool {
         if let Some(ref fmt) = self.provider.format {
             return fmt == "anthropic";
         }
 
-        ProviderPreset::from_name(&self.provider.name)
-            .map(|p| p.format == "anthropic")
-            .unwrap_or(false)
+        ProviderPreset::from_name(&self.provider.name).is_some_and(|p| p.format == "anthropic")
     }
 }
 

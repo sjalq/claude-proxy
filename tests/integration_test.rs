@@ -5,11 +5,6 @@ use claude_proxy::translate::anthropic_types::*;
 use futures::StreamExt;
 use std::collections::HashMap;
 
-/// Read Fireworks API key from env, or skip the test
-fn fireworks_key() -> Option<String> {
-    std::env::var("FIREWORKS_API_KEY").ok()
-}
-
 fn fireworks_config() -> ProxyConfig {
     let mut models = HashMap::new();
     models.insert(
@@ -59,7 +54,7 @@ fn simple_request(model: &str, prompt: &str) -> MessagesRequest {
         betas: None,
         context_management: None,
         reasoning_effort: None,
-        extra: Default::default(),
+        extra: HashMap::default(),
     }
 }
 
@@ -107,7 +102,7 @@ fn tool_request() -> MessagesRequest {
         betas: None,
         context_management: None,
         reasoning_effort: None,
-        extra: Default::default(),
+        extra: HashMap::default(),
     }
 }
 
@@ -214,12 +209,8 @@ fn test_stream_translator_basic() {
 // ────────────────────────────────────────────────────────────────
 
 #[tokio::test]
+#[ignore = "requires FIREWORKS_API_KEY"]
 async fn test_non_streaming_fireworks() {
-    let Some(_key) = fireworks_key() else {
-        eprintln!("SKIP: FIREWORKS_API_KEY not set");
-        return;
-    };
-
     let config = fireworks_config();
     let client = reqwest::Client::new();
     let logger = SharedLogger::new("/tmp/claude-proxy-test.log").unwrap();
@@ -239,21 +230,17 @@ async fn test_non_streaming_fireworks() {
             );
         }
         Ok(proxy::ProxyResult::Error(err, status)) => {
-            panic!("Provider error ({}): {:?}", status, err);
+            panic!("Provider error ({status}): {err:?}");
         }
         Err(e) => {
-            panic!("Proxy error: {}", e);
+            panic!("Proxy error: {e}");
         }
     }
 }
 
 #[tokio::test]
+#[ignore = "requires FIREWORKS_API_KEY"]
 async fn test_streaming_fireworks() {
-    let Some(_key) = fireworks_key() else {
-        eprintln!("SKIP: FIREWORKS_API_KEY not set");
-        return;
-    };
-
     let config = fireworks_config();
     let client = reqwest::Client::new();
     let logger = SharedLogger::new("/tmp/claude-proxy-test-stream.log").unwrap();
@@ -267,13 +254,13 @@ async fn test_streaming_fireworks() {
         .collect::<Vec<_>>()
         .await
         .into_iter()
-        .filter_map(|r| r.ok())
+        .filter_map(std::result::Result::ok)
         .collect();
 
     assert!(!events.is_empty(), "Stream produced no events");
 
     let event_names: Vec<&str> = events.iter().map(|e| e.event.as_str()).collect();
-    println!("Stream events: {:?}", event_names);
+    println!("Stream events: {event_names:?}");
 
     assert!(
         event_names.contains(&"message_start"),
@@ -290,12 +277,8 @@ async fn test_streaming_fireworks() {
 }
 
 #[tokio::test]
+#[ignore = "requires FIREWORKS_API_KEY"]
 async fn test_tool_use_fireworks() {
-    let Some(_key) = fireworks_key() else {
-        eprintln!("SKIP: FIREWORKS_API_KEY not set");
-        return;
-    };
-
     let config = fireworks_config();
     let client = reqwest::Client::new();
     let logger = SharedLogger::new("/tmp/claude-proxy-test-tools.log").unwrap();
@@ -322,21 +305,17 @@ async fn test_tool_use_fireworks() {
             }
         }
         Ok(proxy::ProxyResult::Error(err, status)) => {
-            panic!("Provider error ({}): {:?}", status, err);
+            panic!("Provider error ({status}): {err:?}");
         }
         Err(e) => {
-            panic!("Proxy error: {}", e);
+            panic!("Proxy error: {e}");
         }
     }
 }
 
 #[tokio::test]
+#[ignore = "requires FIREWORKS_API_KEY"]
 async fn test_full_server_roundtrip() {
-    let Some(_key) = fireworks_key() else {
-        eprintln!("SKIP: FIREWORKS_API_KEY not set");
-        return;
-    };
-
     let config = fireworks_config();
     let logger = SharedLogger::new("/tmp/claude-proxy-test-server.log").unwrap();
     let client = reqwest::Client::new();
@@ -360,7 +339,7 @@ async fn test_full_server_roundtrip() {
 
     // Test health endpoint
     let health_resp = client
-        .get(format!("http://{}/health", addr))
+        .get(format!("http://{addr}/health"))
         .send()
         .await
         .unwrap();
@@ -374,7 +353,7 @@ async fn test_full_server_roundtrip() {
     });
 
     let msg_resp = client
-        .post(format!("http://{}/v1/messages", addr))
+        .post(format!("http://{addr}/v1/messages"))
         .header("Content-Type", "application/json")
         .json(&req_body)
         .send()
@@ -386,5 +365,5 @@ async fn test_full_server_roundtrip() {
     let body: serde_json::Value = msg_resp.json().await.unwrap();
     assert_eq!(body["type"], "message");
     assert_eq!(body["role"], "assistant");
-    println!("Server roundtrip response: {}", body);
+    println!("Server roundtrip response: {body}");
 }

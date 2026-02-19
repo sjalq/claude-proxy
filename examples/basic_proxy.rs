@@ -1,8 +1,8 @@
 //! Start a claude-proxy server programmatically.
 //!
 //! Usage:
-//!   export FIREWORKS_API_KEY=fw_your_key
-//!   cargo run --example basic_proxy
+//!   export `FIREWORKS_API_KEY=fw_your_key`
+//!   cargo run --example `basic_proxy`
 
 use claude_proxy::{build_router, AppState, ProxyConfig, SharedLogger};
 use std::sync::Arc;
@@ -30,12 +30,12 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let app = build_router(state);
-    let addr = format!("0.0.0.0:{}", port);
+    let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await?;
 
-    println!("Listening on http://{}", addr);
+    println!("Listening on http://{addr}");
     println!();
-    println!("  ANTHROPIC_BASE_URL=http://localhost:{} claude", port);
+    println!("  ANTHROPIC_BASE_URL=http://localhost:{port} claude");
 
     axum::serve(listener, app).await?;
     Ok(())

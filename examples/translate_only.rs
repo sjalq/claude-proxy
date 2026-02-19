@@ -1,10 +1,15 @@
 //! Demonstrate using the translation layer without a server.
 //!
 //! Usage:
-//!   cargo run --example translate_only
+//!   `cargo run --example translate_only`
 
-use claude_proxy::translate::anthropic_types::*;
-use claude_proxy::translate::openai_types::*;
+use claude_proxy::translate::anthropic_types::{
+    Message, MessageContent, MessagesRequest, Role, SystemContent,
+};
+use claude_proxy::translate::openai_types::{
+    ChatCompletionChunk, ChatCompletionResponse, ChatUsage, Choice, ChoiceMessage, ChunkChoice,
+    ChunkDelta,
+};
 use claude_proxy::translate::request::anthropic_to_openai;
 use claude_proxy::translate::response::openai_to_anthropic;
 use claude_proxy::translate::streaming::StreamTranslator;
@@ -44,7 +49,7 @@ fn main() {
         betas: None,
         context_management: None,
         reasoning_effort: None,
-        extra: Default::default(),
+        extra: HashMap::default(),
     };
 
     // Translate to OpenAI format

@@ -1,3 +1,11 @@
+#![deny(unsafe_code)]
+#![warn(clippy::pedantic)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation
+)]
+
 //! # claude-proxy
 //!
 //! Universal API proxy for Claude Code — route through any LLM provider.

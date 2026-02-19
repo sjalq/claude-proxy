@@ -33,6 +33,7 @@ pub struct LogEntry {
 }
 
 impl LogEntry {
+    #[must_use]
     pub fn new(level: LogLevel, component: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             timestamp: Utc::now(),
@@ -43,6 +44,7 @@ impl LogEntry {
         }
     }
 
+    #[must_use]
     pub fn with_context(mut self, ctx: serde_json::Value) -> Self {
         self.context = Some(ctx);
         self
@@ -57,6 +59,10 @@ pub struct Logger {
 }
 
 impl Logger {
+    /// Create a new logger, loading existing entries from the JSONL file.
+    ///
+    /// # Errors
+    /// Returns `io::Error` if the file can't be opened or read.
     pub fn new(file_path: impl AsRef<Path>) -> std::io::Result<Self> {
         let file_path = file_path.as_ref().to_path_buf();
 
@@ -95,7 +101,7 @@ impl Logger {
     pub fn log(&mut self, entry: LogEntry) {
         if let Some(ref mut writer) = self.writer {
             if let Ok(json) = serde_json::to_string(&entry) {
-                let _ = writeln!(writer, "{}", json);
+                let _ = writeln!(writer, "{json}");
                 let _ = writer.flush();
             }
         }
@@ -105,10 +111,15 @@ impl Logger {
         self.entries.push_back(entry);
     }
 
+    #[must_use]
     pub fn recent(&self, limit: usize) -> Vec<LogEntry> {
         self.entries.iter().rev().take(limit).cloned().collect()
     }
 
+    /// Compact the log file, keeping only entries in the ring buffer.
+    ///
+    /// # Errors
+    /// Returns `io::Error` if the file can't be rewritten.
     pub fn compact(&mut self) -> std::io::Result<()> {
         self.writer = None;
         let file = OpenOptions::new()
@@ -119,7 +130,7 @@ impl Logger {
         let mut writer = BufWriter::new(file);
         for entry in &self.entries {
             if let Ok(json) = serde_json::to_string(entry) {
-                writeln!(writer, "{}", json)?;
+                writeln!(writer, "{json}")?;
             }
         }
         writer.flush()?;
@@ -136,6 +147,10 @@ impl Logger {
 pub struct SharedLogger(Arc<Mutex<Logger>>);
 
 impl SharedLogger {
+    /// Create a new thread-safe logger.
+    ///
+    /// # Errors
+    /// Returns `io::Error` if the log file can't be opened.
     pub fn new(file_path: impl AsRef<Path>) -> std::io::Result<Self> {
         Ok(Self(Arc::new(Mutex::new(Logger::new(file_path)?))))
     }
@@ -172,6 +187,7 @@ impl SharedLogger {
         self.log(LogEntry::new(level, component, message).with_context(context));
     }
 
+    #[must_use]
     pub fn recent(&self, limit: usize) -> Vec<LogEntry> {
         self.0.lock().map(|l| l.recent(limit)).unwrap_or_default()
     }

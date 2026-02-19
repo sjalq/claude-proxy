@@ -1,4 +1,4 @@
-//! Translate OpenAI Chat Completions responses into Anthropic Messages API responses.
+//! Translate `OpenAI` Chat Completions responses into Anthropic Messages API responses.
 //!
 //! Handles text content, tool calls, finish reason mapping, usage statistics,
 //! and error translation. Supports `reasoning_content` from reasoning models.
@@ -6,8 +6,8 @@
 use super::anthropic_types::{ErrorResponse, MessagesResponse, ResponseContentBlock, Usage};
 use super::openai_types::{ChatCompletionResponse, ChatErrorResponse};
 
-/// Translate an OpenAI Chat Completion response into an Anthropic Messages response.
-/// Pure function: original_model is what Claude Code originally requested.
+/// Translate an `OpenAI` Chat Completion response into an Anthropic Messages response.
+/// Pure function: `original_model` is what Claude Code originally requested.
 pub fn openai_to_anthropic(
     resp: &ChatCompletionResponse,
     original_model: &str,
@@ -60,8 +60,7 @@ pub fn openai_to_anthropic(
 
     let stop_reason = choice
         .and_then(|c| c.finish_reason.as_deref())
-        .map(map_finish_reason)
-        .unwrap_or_else(|| "end_turn".to_string());
+        .map_or_else(|| "end_turn".to_string(), map_finish_reason);
 
     let usage = resp.usage.as_ref().map_or_else(Usage::default, |u| Usage {
         input_tokens: u.prompt_tokens,
@@ -85,23 +84,24 @@ pub fn openai_to_anthropic(
     }
 }
 
-/// Map OpenAI finish_reason to Anthropic stop_reason
+/// Map `OpenAI` `finish_reason` to Anthropic `stop_reason`
+/// Map `OpenAI` `finish_reason` to Anthropic `stop_reason`.
+#[must_use]
 pub fn map_finish_reason(reason: &str) -> String {
     match reason {
-        "stop" => "end_turn".to_string(),
+        "stop" | "content_filter" => "end_turn".to_string(),
         "length" => "max_tokens".to_string(),
         "tool_calls" | "function_call" => "tool_use".to_string(),
-        "content_filter" => "end_turn".to_string(),
         other => other.to_string(),
     }
 }
 
-/// Translate an OpenAI error into an Anthropic error response
+/// Translate an `OpenAI` error into an Anthropic error response
+#[must_use]
 pub fn openai_error_to_anthropic(err: &ChatErrorResponse) -> ErrorResponse {
     let error_type = match err.error.error_type.as_str() {
         "invalid_request_error" => "invalid_request_error",
         "rate_limit_error" | "rate_limit_exceeded" => "rate_limit_error",
-        "server_error" | "internal_error" => "api_error",
         _ => "api_error",
     };
 

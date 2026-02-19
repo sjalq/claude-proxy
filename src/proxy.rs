@@ -1,5 +1,5 @@
 //! Core proxy logic: forward requests to the configured provider, translating
-//! between Anthropic and OpenAI formats as needed.
+//! between Anthropic and `OpenAI` formats as needed.
 //!
 //! Supports non-streaming, streaming (SSE), and direct passthrough modes.
 //! Includes automatic retry with exponential backoff for transient errors.
@@ -45,8 +45,12 @@ pub type SseStream =
 
 /// Forward a non-streaming Anthropic request through the configured provider.
 ///
-/// Translates the request to OpenAI format, sends it, translates the response
+/// Translates the request to `OpenAI` format, sends it, translates the response
 /// back to Anthropic format. Retries on transient errors (429, 5xx).
+///
+/// # Errors
+/// Returns `ProxyError::Provider` on network failures, `ProxyError::Translation`
+/// on parse errors.
 pub async fn proxy_non_streaming(
     req: &MessagesRequest,
     config: &ProxyConfig,
@@ -61,21 +65,15 @@ pub async fn proxy_non_streaming(
     logger.info("proxy", format!("POST {} model={}", url, openai_req.model));
 
     let body = serde_json::to_vec(&openai_req)
-        .map_err(|e| ProxyError::translation(format!("Failed to serialize request: {}", e)))?;
+        .map_err(|e| ProxyError::translation(format!("Failed to serialize request: {e}")))?;
 
-    let response = send_with_retry(
-        client,
-        &url,
-        &api_key,
-        &body,
-        logger,
-    )
-    .await?;
+    let response = send_with_retry(client, &url, &api_key, &body, logger).await?;
 
     let status = response.status().as_u16();
-    let resp_body = response.text().await.map_err(|e| {
-        ProxyError::provider(format!("Failed to read response body: {}", e))
-    })?;
+    let resp_body = response
+        .text()
+        .await
+        .map_err(|e| ProxyError::provider(format!("Failed to read response body: {e}")))?;
 
     logger.debug(
         "proxy",
@@ -97,14 +95,13 @@ pub async fn proxy_non_streaming(
         return Ok(ProxyResult::Error(anthropic_err, status));
     }
 
-    let openai_resp: ChatCompletionResponse =
-        serde_json::from_str(&resp_body).map_err(|e| {
-            ProxyError::translation(format!(
-                "Failed to parse provider response: {}. Body: {}",
-                e,
-                truncate(&resp_body, 300)
-            ))
-        })?;
+    let openai_resp: ChatCompletionResponse = serde_json::from_str(&resp_body).map_err(|e| {
+        ProxyError::translation(format!(
+            "Failed to parse provider response: {}. Body: {}",
+            e,
+            truncate(&resp_body, 300)
+        ))
+    })?;
 
     let anthropic_resp = openai_to_anthropic(&openai_resp, &req.model);
 
@@ -121,8 +118,12 @@ pub async fn proxy_non_streaming(
 
 /// Forward a streaming Anthropic request, returning a stream of Anthropic SSE events.
 ///
-/// The provider's OpenAI-format SSE chunks are translated into Anthropic-format
+/// The provider's `OpenAI`-format SSE chunks are translated into Anthropic-format
 /// events on the fly via [`StreamTranslator`].
+///
+/// # Errors
+/// Returns `ProxyError::Provider` on network failures, `ProxyError::Config` if
+/// the API key or base URL can't be resolved.
 pub async fn proxy_streaming(
     req: &MessagesRequest,
     config: &ProxyConfig,
@@ -141,12 +142,12 @@ pub async fn proxy_streaming(
 
     let response = client
         .post(&url)
-        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Authorization", format!("Bearer {api_key}"))
         .header("Content-Type", "application/json")
         .json(&openai_req)
         .send()
         .await
-        .map_err(|e| ProxyError::provider(format!("Streaming request failed: {}", e)))?;
+        .map_err(|e| ProxyError::provider(format!("Streaming request failed: {e}")))?;
 
     let status = response.status().as_u16();
 
@@ -154,13 +155,17 @@ pub async fn proxy_streaming(
         let body = response.text().await.unwrap_or_default();
         logger.warn(
             "proxy",
-            format!("Streaming error status={}: {}", status, truncate(&body, 300)),
+            format!(
+                "Streaming error status={}: {}",
+                status,
+                truncate(&body, 300)
+            ),
         );
 
         let error_event = if let Ok(err) = serde_json::from_str::<ChatErrorResponse>(&body) {
             openai_error_to_anthropic(&err)
         } else {
-            ErrorResponse::api_error(format!("Provider returned status {}", status))
+            ErrorResponse::api_error(format!("Provider returned status {status}"))
         };
 
         let error_json = serde_json::to_string(&error_event).unwrap_or_default();
@@ -181,7 +186,7 @@ pub async fn proxy_streaming(
     Ok(Box::pin(event_stream))
 }
 
-/// Parse an OpenAI SSE byte stream and translate chunks into Anthropic SSE events.
+/// Parse an `OpenAI` SSE byte stream and translate chunks into Anthropic SSE events.
 fn sse_translate_stream(
     byte_stream: impl Stream<Item = std::result::Result<Bytes, reqwest::Error>> + Send + 'static,
     model: String,
@@ -197,7 +202,7 @@ fn sse_translate_stream(
             let chunk = match chunk_result {
                 Ok(c) => c,
                 Err(e) => {
-                    logger.error("stream", format!("Byte stream error: {}", e));
+                    logger.error("stream", format!("Byte stream error: {e}"));
                     break;
                 }
             };
@@ -237,7 +242,7 @@ fn sse_translate_stream(
                 let chunk: ChatCompletionChunk = match serde_json::from_str(data) {
                     Ok(c) => c,
                     Err(e) => {
-                        logger.debug("stream", format!("Skipping unparseable chunk: {}", e));
+                        logger.debug("stream", format!("Skipping unparseable chunk: {e}"));
                         continue;
                     }
                 };
@@ -270,6 +275,10 @@ fn sse_translate_stream(
 }
 
 /// Forward an Anthropic-format request directly (passthrough mode for Anthropic provider).
+///
+/// # Errors
+/// Returns `ProxyError::Provider` on network failures, `ProxyError::Config` if
+/// credentials can't be resolved.
 pub async fn proxy_passthrough(
     body: Bytes,
     headers: &reqwest::header::HeaderMap,
@@ -281,7 +290,7 @@ pub async fn proxy_passthrough(
     let base_url = config.effective_base_url()?;
     let url = format!("{}/v1/messages", base_url.trim_end_matches('/'));
 
-    logger.info("proxy", format!("Passthrough POST {}", url));
+    logger.info("proxy", format!("Passthrough POST {url}"));
 
     let mut req_builder = client
         .post(&url)
@@ -296,14 +305,14 @@ pub async fn proxy_passthrough(
         .body(body)
         .send()
         .await
-        .map_err(|e| ProxyError::provider(format!("Passthrough request failed: {}", e)))?;
+        .map_err(|e| ProxyError::provider(format!("Passthrough request failed: {e}")))?;
 
     let status = response.status().as_u16();
     let resp_headers = response.headers().clone();
     let resp_body = response
         .bytes()
         .await
-        .map_err(|e| ProxyError::provider(format!("Failed to read passthrough response: {}", e)))?;
+        .map_err(|e| ProxyError::provider(format!("Failed to read passthrough response: {e}")))?;
 
     logger.info(
         "proxy",
@@ -333,12 +342,12 @@ async fn send_with_retry(
     for attempt in 0..=MAX_RETRIES {
         let resp = client
             .post(url)
-            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Authorization", format!("Bearer {api_key}"))
             .header("Content-Type", "application/json")
             .body(body.to_vec())
             .send()
             .await
-            .map_err(|e| ProxyError::provider(format!("Request failed: {}", e)))?;
+            .map_err(|e| ProxyError::provider(format!("Request failed: {e}")))?;
 
         let status = resp.status().as_u16();
 

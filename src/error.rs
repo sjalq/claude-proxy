@@ -3,6 +3,7 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ProxyError {
     #[error("Configuration error: {message}")]
     Config { message: String },

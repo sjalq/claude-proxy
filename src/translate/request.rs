@@ -1,10 +1,11 @@
-//! Translate Anthropic Messages API requests into OpenAI Chat Completions requests.
+//! Translate Anthropic Messages API requests into `OpenAI` Chat Completions requests.
 //!
 //! Handles system messages, multi-part content (text, images), tool use, tool results,
-//! and tool choice mapping. A single Anthropic message can expand into multiple OpenAI
+//! and tool choice mapping. A single Anthropic message can expand into multiple `OpenAI`
 //! messages (e.g. a user message with `tool_result` blocks becomes separate `tool`-role messages).
 
 use std::collections::HashMap;
+use std::hash::BuildHasher;
 
 use super::anthropic_types::{
     ContentBlock, Message, MessagesRequest, Role, ToolChoice, ToolChoiceAuto, ToolChoiceSpecific,
@@ -15,11 +16,11 @@ use super::openai_types::{
     ContentPart, ImageUrlDetail, StreamOptions,
 };
 
-/// Translate an Anthropic Messages API request into an OpenAI Chat Completions request.
+/// Translate an Anthropic Messages API request into an `OpenAI` Chat Completions request.
 /// Pure function: takes the request + model mapping, returns the translated request.
-pub fn anthropic_to_openai(
+pub fn anthropic_to_openai<S: BuildHasher>(
     req: &MessagesRequest,
-    model_map: &HashMap<String, String>,
+    model_map: &HashMap<String, String, S>,
 ) -> ChatCompletionRequest {
     let target_model = model_map
         .get(&req.model)
@@ -80,8 +81,8 @@ pub fn anthropic_to_openai(
     }
 }
 
-/// A single Anthropic message can expand to multiple OpenAI messages
-/// (e.g. a user message with tool_results becomes separate tool-role messages).
+/// A single Anthropic message can expand to multiple `OpenAI` messages
+/// (e.g. a user message with `tool_results` becomes separate tool-role messages).
 fn translate_message(msg: &Message) -> Vec<ChatMessage> {
     let blocks = msg.content.blocks();
 
@@ -126,7 +127,7 @@ fn translate_user_message(blocks: &[ContentBlock]) -> Vec<ChatMessage> {
                     content_parts.clear();
                 }
 
-                let result_text = tool_result_to_string(content, *is_error);
+                let result_text = tool_result_to_string(content.as_ref(), *is_error);
 
                 messages.push(ChatMessage {
                     role: "tool".to_string(),
@@ -136,12 +137,7 @@ fn translate_user_message(blocks: &[ContentBlock]) -> Vec<ChatMessage> {
                     name: None,
                 });
             }
-            ContentBlock::Thinking { .. } => {
-                // Thinking blocks don't have an OpenAI equivalent; skip
-            }
-            ContentBlock::ToolUse { .. } => {
-                // tool_use in a user message is unusual; skip
-            }
+            ContentBlock::Thinking { .. } | ContentBlock::ToolUse { .. } => {}
         }
     }
 
@@ -225,7 +221,7 @@ fn collapse_content_parts(parts: &[ContentPart]) -> ChatContent {
 }
 
 fn tool_result_to_string(
-    content: &Option<super::anthropic_types::ToolResultContent>,
+    content: Option<&super::anthropic_types::ToolResultContent>,
     is_error: Option<bool>,
 ) -> String {
     let prefix = if is_error == Some(true) {
@@ -236,7 +232,7 @@ fn tool_result_to_string(
 
     match content {
         Some(super::anthropic_types::ToolResultContent::Text(t)) => {
-            format!("{}{}", prefix, t)
+            format!("{prefix}{t}")
         }
         Some(super::anthropic_types::ToolResultContent::Blocks(blocks)) => {
             let text: String = blocks
@@ -247,9 +243,9 @@ fn tool_result_to_string(
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
-            format!("{}{}", prefix, text)
+            format!("{prefix}{text}")
         }
-        None => format!("{}(no content)", prefix),
+        None => format!("{prefix}(no content)"),
     }
 }
 
@@ -296,7 +292,7 @@ mod tests {
             betas: None,
             context_management: None,
             reasoning_effort: None,
-            extra: Default::default(),
+            extra: HashMap::default(),
         };
 
         let mut model_map = HashMap::new();
@@ -341,7 +337,7 @@ mod tests {
             betas: None,
             context_management: None,
             reasoning_effort: None,
-            extra: Default::default(),
+            extra: HashMap::default(),
         };
 
         let result = anthropic_to_openai(&req, &HashMap::new());
@@ -374,7 +370,7 @@ mod tests {
             betas: None,
             context_management: None,
             reasoning_effort: None,
-            extra: Default::default(),
+            extra: HashMap::default(),
         };
 
         let result = anthropic_to_openai(&req, &HashMap::new());

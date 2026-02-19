@@ -66,10 +66,12 @@ const PRESETS: &[ProviderPreset] = &[
 ];
 
 impl ProviderPreset {
+    #[must_use]
     pub fn from_name(name: &str) -> Option<&'static ProviderPreset> {
         PRESETS.iter().find(|p| p.name == name.to_lowercase())
     }
 
+    #[must_use]
     pub fn all() -> &'static [ProviderPreset] {
         PRESETS
     }

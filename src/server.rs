@@ -60,8 +60,8 @@ async fn handle_messages(
         Err(e) => {
             state
                 .logger
-                .error("server", format!("Failed to parse request: {}", e));
-            let err = ErrorResponse::invalid_request(format!("Invalid request body: {}", e));
+                .error("server", format!("Failed to parse request: {e}"));
+            let err = ErrorResponse::invalid_request(format!("Invalid request body: {e}"));
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
         }
     };
@@ -93,8 +93,8 @@ async fn handle_non_streaming(state: Arc<AppState>, req: &MessagesRequest) -> Re
             (status, Json(err)).into_response()
         }
         Err(e) => {
-            state.logger.error("server", format!("Proxy error: {}", e));
-            let err = ErrorResponse::api_error(format!("Proxy error: {}", e));
+            state.logger.error("server", format!("Proxy error: {e}"));
+            let err = ErrorResponse::api_error(format!("Proxy error: {e}"));
             (StatusCode::BAD_GATEWAY, Json(err)).into_response()
         }
     }
@@ -107,8 +107,8 @@ async fn handle_streaming(state: Arc<AppState>, req: &MessagesRequest) -> Respon
             Err(e) => {
                 state
                     .logger
-                    .error("server", format!("Streaming setup error: {}", e));
-                let err = ErrorResponse::api_error(format!("Streaming error: {}", e));
+                    .error("server", format!("Streaming setup error: {e}"));
+                let err = ErrorResponse::api_error(format!("Streaming error: {e}"));
                 return (StatusCode::BAD_GATEWAY, Json(err)).into_response();
             }
         };
@@ -137,11 +137,10 @@ async fn handle_passthrough(state: Arc<AppState>, headers: HeaderMap, body: Byte
     )
     .await
     {
-        Ok((status, _resp_headers, resp_body)) => {
+        Ok((status, resp_headers, resp_body)) => {
             let status_code = StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY);
 
-            // Check if response is streaming (SSE)
-            let content_type = _resp_headers
+            let content_type = resp_headers
                 .get("content-type")
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("");
@@ -164,8 +163,8 @@ async fn handle_passthrough(state: Arc<AppState>, headers: HeaderMap, body: Byte
         Err(e) => {
             state
                 .logger
-                .error("server", format!("Passthrough error: {}", e));
-            let err = ErrorResponse::api_error(format!("Passthrough error: {}", e));
+                .error("server", format!("Passthrough error: {e}"));
+            let err = ErrorResponse::api_error(format!("Passthrough error: {e}"));
             (StatusCode::BAD_GATEWAY, Json(err)).into_response()
         }
     }
@@ -197,7 +196,7 @@ async fn handle_models(State(state): State<Arc<AppState>>) -> Json<serde_json::V
 
 fn reqwest_headers_from_axum(headers: &HeaderMap) -> reqwest::header::HeaderMap {
     let mut out = reqwest::header::HeaderMap::new();
-    for (key, value) in headers.iter() {
+    for (key, value) in headers {
         if let Ok(name) = reqwest::header::HeaderName::from_bytes(key.as_str().as_bytes()) {
             if let Ok(val) = reqwest::header::HeaderValue::from_bytes(value.as_bytes()) {
                 out.insert(name, val);

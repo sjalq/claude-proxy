@@ -1,6 +1,6 @@
-//! State machine for translating OpenAI streaming chunks into Anthropic SSE events.
+//! State machine for translating `OpenAI` streaming chunks into Anthropic SSE events.
 //!
-//! The [`StreamTranslator`] processes OpenAI `ChatCompletionChunk`s one at a time,
+//! The [`StreamTranslator`] processes `OpenAI` `ChatCompletionChunk`s one at a time,
 //! maintaining state about which content blocks are open, and emitting the
 //! corresponding Anthropic stream events (`message_start`, `content_block_delta`, etc.).
 
@@ -21,15 +21,15 @@ struct ActiveToolCall {
     emitted_start: bool,
 }
 
-/// State machine that translates OpenAI streaming chunks into Anthropic SSE events.
+/// State machine that translates `OpenAI` streaming chunks into Anthropic SSE events.
 ///
 /// Usage:
-///   let mut translator = StreamTranslator::new("claude-sonnet-4-20250514");
-///   for chunk in openai_chunks {
-///       let events = translator.process_chunk(&chunk);
+///   let mut translator = `StreamTranslator::new("claude-sonnet-4-20250514`");
+///   for chunk in `openai_chunks` {
+///       let events = `translator.process_chunk(&chunk)`;
 ///       // send each event as SSE
 ///   }
-///   let final_events = translator.finish();
+///   let `final_events` = `translator.finish()`;
 #[derive(Debug)]
 pub struct StreamTranslator {
     model: String,
@@ -44,6 +44,7 @@ pub struct StreamTranslator {
 }
 
 impl StreamTranslator {
+    #[must_use]
     pub fn new(model: &str) -> Self {
         Self {
             model: model.to_string(),
@@ -58,7 +59,7 @@ impl StreamTranslator {
         }
     }
 
-    /// Process a single OpenAI streaming chunk, returning zero or more Anthropic SSE events.
+    /// Process a single `OpenAI` streaming chunk, returning zero or more Anthropic SSE events.
     pub fn process_chunk(&mut self, chunk: &ChatCompletionChunk) -> Vec<StreamEvent> {
         if self.finished {
             return Vec::new();
@@ -79,9 +80,8 @@ impl StreamTranslator {
             self.started = true;
         }
 
-        let choice = match chunk.choices.first() {
-            Some(c) => c,
-            None => return events,
+        let Some(choice) = chunk.choices.first() else {
+            return events;
         };
 
         // Handle text content deltas.
@@ -312,7 +312,10 @@ mod tests {
         let events = translator.process_chunk(&text_chunk("c1", "Hello", None));
         assert!(events.len() >= 3); // message_start, ping, block_start, delta
 
-        let event_names: Vec<&str> = events.iter().map(|e| e.event_name()).collect();
+        let event_names: Vec<&str> = events
+            .iter()
+            .map(super::super::anthropic_types::StreamEvent::event_name)
+            .collect();
         assert!(event_names.contains(&"message_start"));
         assert!(event_names.contains(&"content_block_start"));
         assert!(event_names.contains(&"content_block_delta"));
@@ -324,7 +327,10 @@ mod tests {
 
         // Finish
         let events = translator.process_chunk(&text_chunk("c1", "", Some("stop")));
-        let event_names: Vec<&str> = events.iter().map(|e| e.event_name()).collect();
+        let event_names: Vec<&str> = events
+            .iter()
+            .map(super::super::anthropic_types::StreamEvent::event_name)
+            .collect();
         assert!(event_names.contains(&"content_block_stop"));
         assert!(event_names.contains(&"message_delta"));
         assert!(event_names.contains(&"message_stop"));
@@ -365,7 +371,10 @@ mod tests {
         };
 
         let events = translator.process_chunk(&tool_chunk);
-        let event_names: Vec<&str> = events.iter().map(|e| e.event_name()).collect();
+        let event_names: Vec<&str> = events
+            .iter()
+            .map(super::super::anthropic_types::StreamEvent::event_name)
+            .collect();
         assert!(event_names.contains(&"content_block_stop")); // closes text block
         assert!(event_names.contains(&"content_block_start")); // opens tool block
         assert!(event_names.contains(&"content_block_delta")); // argument delta
@@ -376,7 +385,10 @@ mod tests {
         let mut translator = StreamTranslator::new("test-model");
         let events = translator.finish();
 
-        let event_names: Vec<&str> = events.iter().map(|e| e.event_name()).collect();
+        let event_names: Vec<&str> = events
+            .iter()
+            .map(super::super::anthropic_types::StreamEvent::event_name)
+            .collect();
         assert!(event_names.contains(&"message_start"));
         assert!(event_names.contains(&"message_delta"));
         assert!(event_names.contains(&"message_stop"));

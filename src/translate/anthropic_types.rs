@@ -82,6 +82,7 @@ pub enum MessageContent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
+#[non_exhaustive]
 pub enum ContentBlock {
     #[serde(rename = "text")]
     Text { text: String },
@@ -179,6 +180,7 @@ pub struct MessagesResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
+#[non_exhaustive]
 pub enum ResponseContentBlock {
     #[serde(rename = "text")]
     Text { text: String },
@@ -206,6 +208,7 @@ pub struct Usage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
+#[non_exhaustive]
 pub enum StreamEvent {
     #[serde(rename = "message_start")]
     MessageStart { message: MessagesResponse },
@@ -298,6 +301,7 @@ impl ErrorResponse {
 // ---------------------------------------------------------------------------
 
 impl SystemContent {
+    #[must_use]
     pub fn as_text(&self) -> String {
         match self {
             SystemContent::Text(t) => t.clone(),
@@ -313,6 +317,7 @@ impl SystemContent {
 }
 
 impl MessageContent {
+    #[must_use]
     pub fn blocks(&self) -> Vec<ContentBlock> {
         match self {
             MessageContent::Text(t) => vec![ContentBlock::Text { text: t.clone() }],
@@ -322,6 +327,7 @@ impl MessageContent {
 }
 
 impl StreamEvent {
+    #[must_use]
     pub fn event_name(&self) -> &'static str {
         match self {
             StreamEvent::MessageStart { .. } => "message_start",
