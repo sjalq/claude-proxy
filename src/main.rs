@@ -1,5 +1,5 @@
-use claude_proxy::{build_router, AppState, ProxyConfig, SharedLogger};
 use clap::Parser;
+use claude_proxy::{build_router, AppState, ProxyConfig, SharedLogger};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::info;
@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
         config.port = port;
     }
     if let Some(ref provider) = cli.provider {
-        config.provider.name = provider.clone();
+        config.provider.name.clone_from(provider);
         if let Some(preset) = claude_proxy::providers::ProviderPreset::from_name(provider) {
             if config.provider.base_url.is_none() {
                 config.provider.base_url = Some(preset.base_url.to_string());
@@ -75,27 +75,35 @@ async fn main() -> anyhow::Result<()> {
 
     let logger = SharedLogger::new(&cli.log_file)?;
 
-    // Validate config eagerly
     let base_url = config.effective_base_url()?;
     let _api_key = config.resolve_api_key()?;
 
-    info!("╔═══════════════════════════════════════════════════════╗");
-    info!("║           claude-proxy v{}                  ║", env!("CARGO_PKG_VERSION"));
-    info!("╚═══════════════════════════════════════════════════════╝");
+    info!("claude-proxy v{}", env!("CARGO_PKG_VERSION"));
     info!("  Provider:  {}", config.provider.name);
     info!("  Base URL:  {}", base_url);
-    info!("  Format:    {}", if config.is_anthropic_format() { "anthropic (passthrough)" } else { "openai (translate)" });
+    info!(
+        "  Format:    {}",
+        if config.is_anthropic_format() {
+            "anthropic (passthrough)"
+        } else {
+            "openai (translate)"
+        }
+    );
     info!("  Port:      {}", config.port);
     info!("  Models:    {} mapped", config.models.len());
     info!("  Log file:  {}", cli.log_file.display());
 
-    logger.info("startup", format!(
-        "Starting claude-proxy provider={} base_url={} port={}",
-        config.provider.name, base_url, config.port
-    ));
+    logger.info(
+        "startup",
+        format!(
+            "Starting claude-proxy provider={} base_url={} port={}",
+            config.provider.name, base_url, config.port
+        ),
+    );
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
+        .pool_max_idle_per_host(10)
         .build()?;
 
     let state = Arc::new(AppState {
@@ -110,11 +118,42 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Listening on http://{}", bind_addr);
     info!("");
-    info!("  To use with Claude Code:");
-    info!("    ANTHROPIC_BASE_URL=http://localhost:{} claude", config.port);
+    info!(
+        "  ANTHROPIC_BASE_URL=http://localhost:{} claude",
+        config.port
+    );
     info!("");
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+
+    logger.info("shutdown", "Proxy stopped");
+    info!("Shutdown complete");
 
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => { info!("Received Ctrl+C, shutting down..."); },
+        _ = terminate => { info!("Received SIGTERM, shutting down..."); },
+    }
 }

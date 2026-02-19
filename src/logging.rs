@@ -1,3 +1,8 @@
+//! Structured JSONL logging with a ring-buffer for in-memory access.
+//!
+//! Follows the same pattern as twolebot: each log entry is a JSON line appended
+//! to a file, with a bounded in-memory ring buffer for recent access.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -64,7 +69,7 @@ impl Logger {
         if file_path.exists() {
             let file = File::open(&file_path)?;
             let reader = BufReader::new(file);
-            for line in reader.lines().flatten() {
+            for line in reader.lines().map_while(Result::ok) {
                 if let Ok(entry) = serde_json::from_str::<LogEntry>(&line) {
                     if entries.len() >= MAX_LOG_ENTRIES {
                         entries.pop_front();

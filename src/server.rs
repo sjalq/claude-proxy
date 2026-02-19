@@ -1,3 +1,8 @@
+//! HTTP server with Axum routes for the proxy.
+//!
+//! Exposes `/v1/messages` (the Anthropic Messages API endpoint), `/health`,
+//! and `/v1/models`. Handles both streaming and non-streaming requests.
+
 use crate::config::ProxyConfig;
 use crate::logging::SharedLogger;
 use crate::proxy;
@@ -53,10 +58,9 @@ async fn handle_messages(
     let req: MessagesRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
         Err(e) => {
-            state.logger.error(
-                "server",
-                format!("Failed to parse request: {}", e),
-            );
+            state
+                .logger
+                .error("server", format!("Failed to parse request: {}", e));
             let err = ErrorResponse::invalid_request(format!("Invalid request body: {}", e));
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
         }
@@ -101,7 +105,9 @@ async fn handle_streaming(state: Arc<AppState>, req: &MessagesRequest) -> Respon
         match proxy::proxy_streaming(req, &state.config, &state.client, &state.logger).await {
             Ok(s) => s,
             Err(e) => {
-                state.logger.error("server", format!("Streaming setup error: {}", e));
+                state
+                    .logger
+                    .error("server", format!("Streaming setup error: {}", e));
                 let err = ErrorResponse::api_error(format!("Streaming error: {}", e));
                 return (StatusCode::BAD_GATEWAY, Json(err)).into_response();
             }
@@ -109,9 +115,7 @@ async fn handle_streaming(state: Arc<AppState>, req: &MessagesRequest) -> Respon
 
     let event_stream = sse_stream.map(|result| -> std::result::Result<Event, Infallible> {
         match result {
-            Ok(sse_event) => Ok(Event::default()
-                .event(sse_event.event)
-                .data(sse_event.data)),
+            Ok(sse_event) => Ok(Event::default().event(sse_event.event).data(sse_event.data)),
             Err(_) => Ok(Event::default().event("error").data("{}")),
         }
     });
@@ -121,15 +125,17 @@ async fn handle_streaming(state: Arc<AppState>, req: &MessagesRequest) -> Respon
         .into_response()
 }
 
-async fn handle_passthrough(
-    state: Arc<AppState>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
+async fn handle_passthrough(state: Arc<AppState>, headers: HeaderMap, body: Bytes) -> Response {
     let req_headers = reqwest_headers_from_axum(&headers);
 
-    match proxy::proxy_passthrough(body, &req_headers, &state.config, &state.client, &state.logger)
-        .await
+    match proxy::proxy_passthrough(
+        body,
+        &req_headers,
+        &state.config,
+        &state.client,
+        &state.logger,
+    )
+    .await
     {
         Ok((status, _resp_headers, resp_body)) => {
             let status_code = StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY);
@@ -156,7 +162,9 @@ async fn handle_passthrough(
             }
         }
         Err(e) => {
-            state.logger.error("server", format!("Passthrough error: {}", e));
+            state
+                .logger
+                .error("server", format!("Passthrough error: {}", e));
             let err = ErrorResponse::api_error(format!("Passthrough error: {}", e));
             (StatusCode::BAD_GATEWAY, Json(err)).into_response()
         }

@@ -1,6 +1,11 @@
+//! State machine for translating OpenAI streaming chunks into Anthropic SSE events.
+//!
+//! The [`StreamTranslator`] processes OpenAI `ChatCompletionChunk`s one at a time,
+//! maintaining state about which content blocks are open, and emitting the
+//! corresponding Anthropic stream events (`message_start`, `content_block_delta`, etc.).
+
 use super::anthropic_types::{
-    Delta, DeltaUsage, MessageDeltaBody, MessagesResponse, ResponseContentBlock, StreamEvent,
-    Usage,
+    Delta, DeltaUsage, MessageDeltaBody, MessagesResponse, ResponseContentBlock, StreamEvent, Usage,
 };
 use super::openai_types::ChatCompletionChunk;
 use super::response::map_finish_reason;

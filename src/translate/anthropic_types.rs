@@ -1,3 +1,8 @@
+//! Type definitions for the [Anthropic Messages API](https://docs.anthropic.com/en/api/messages).
+//!
+//! These types represent both the request format (what Claude Code sends to us)
+//! and the response format (what we send back), including streaming SSE events.
+
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -164,7 +169,7 @@ pub struct MessagesResponse {
     pub id: String,
     #[serde(rename = "type")]
     pub response_type: String, // "message"
-    pub role: String,          // "assistant"
+    pub role: String, // "assistant"
     pub content: Vec<ResponseContentBlock>,
     pub model: String,
     pub stop_reason: Option<String>,

@@ -1,3 +1,8 @@
+//! Type definitions for the [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat).
+//!
+//! These types represent both the request format (what we send to the provider)
+//! and the response format (what the provider sends back), including streaming chunks.
+
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------

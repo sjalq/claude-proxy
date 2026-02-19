@@ -1,3 +1,9 @@
+//! Built-in provider presets for common LLM API providers.
+//!
+//! Each preset defines the base URL, API format, and default environment variable
+//! for the API key. Users specify a provider name in their config and the preset
+//! fills in the details.
+
 /// Built-in provider presets. Each preset defines the base URL and API format
 /// so users only need to specify a provider name in their config.
 #[derive(Debug, Clone)]
@@ -91,7 +97,11 @@ mod tests {
     fn test_all_others_are_openai_format() {
         for preset in ProviderPreset::all() {
             if preset.name != "anthropic" {
-                assert_eq!(preset.format, "openai", "Provider {} should be openai format", preset.name);
+                assert_eq!(
+                    preset.format, "openai",
+                    "Provider {} should be openai format",
+                    preset.name
+                );
             }
         }
     }

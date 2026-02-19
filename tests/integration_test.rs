@@ -31,10 +31,7 @@ fn fireworks_config() -> ProxyConfig {
         },
         models,
         params: ParamsConfig {
-            drop: vec![
-                "betas".to_string(),
-                "context_management".to_string(),
-            ],
+            drop: vec!["betas".to_string(), "context_management".to_string()],
         },
     }
 }
@@ -78,7 +75,9 @@ fn tool_request() -> MessagesRequest {
         max_tokens: 200,
         messages: vec![Message {
             role: Role::User,
-            content: MessageContent::Text("What's the weather in London? Use the get_weather tool.".to_string()),
+            content: MessageContent::Text(
+                "What's the weather in London? Use the get_weather tool.".to_string(),
+            ),
         }],
         system: None,
         stream: None,
@@ -120,10 +119,7 @@ fn tool_request() -> MessagesRequest {
 fn test_request_translation_roundtrip() {
     let req = simple_request("claude-sonnet-4-20250514", "Hello");
     let mut model_map = HashMap::new();
-    model_map.insert(
-        "claude-sonnet-4-20250514".to_string(),
-        "gpt-4o".to_string(),
-    );
+    model_map.insert("claude-sonnet-4-20250514".to_string(), "gpt-4o".to_string());
 
     let openai_req = claude_proxy::translate::request::anthropic_to_openai(&req, &model_map);
 
@@ -311,9 +307,10 @@ async fn test_tool_use_fireworks() {
         Ok(proxy::ProxyResult::Success(resp)) => {
             println!("Tool response: {:?}", resp.content);
 
-            let has_tool_use = resp.content.iter().any(|b| {
-                matches!(b, ResponseContentBlock::ToolUse { .. })
-            });
+            let has_tool_use = resp
+                .content
+                .iter()
+                .any(|b| matches!(b, ResponseContentBlock::ToolUse { .. }));
 
             // The model may or may not call the tool - just verify we got a valid response
             assert_eq!(resp.response_type, "message");
@@ -351,9 +348,7 @@ async fn test_full_server_roundtrip() {
     });
 
     let app = claude_proxy::build_router(state);
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     tokio::spawn(async move {

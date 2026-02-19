@@ -1,8 +1,13 @@
+//! Translate Anthropic Messages API requests into OpenAI Chat Completions requests.
+//!
+//! Handles system messages, multi-part content (text, images), tool use, tool results,
+//! and tool choice mapping. A single Anthropic message can expand into multiple OpenAI
+//! messages (e.g. a user message with `tool_result` blocks becomes separate `tool`-role messages).
+
 use std::collections::HashMap;
 
 use super::anthropic_types::{
-    ContentBlock, Message, MessagesRequest, Role, ToolChoice, ToolChoiceAuto,
-    ToolChoiceSpecific,
+    ContentBlock, Message, MessagesRequest, Role, ToolChoice, ToolChoiceAuto, ToolChoiceSpecific,
 };
 use super::openai_types::{
     ChatCompletionRequest, ChatContent, ChatFunction, ChatMessage, ChatTool, ChatToolCall,
@@ -54,17 +59,11 @@ pub fn anthropic_to_openai(
 
     let tool_choice = req.tool_choice.as_ref().map(translate_tool_choice);
 
-    let stream_options = req
-        .stream
-        .filter(|s| *s)
-        .map(|_| StreamOptions {
-            include_usage: true,
-        });
+    let stream_options = req.stream.filter(|s| *s).map(|_| StreamOptions {
+        include_usage: true,
+    });
 
-    let user = req
-        .metadata
-        .as_ref()
-        .and_then(|m| m.user_id.clone());
+    let user = req.metadata.as_ref().and_then(|m| m.user_id.clone());
 
     ChatCompletionRequest {
         model: target_model,
@@ -102,10 +101,7 @@ fn translate_user_message(blocks: &[ContentBlock]) -> Vec<ChatMessage> {
                 content_parts.push(ContentPart::Text { text: text.clone() });
             }
             ContentBlock::Image { source } => {
-                let data_uri = format!(
-                    "data:{};base64,{}",
-                    source.media_type, source.data
-                );
+                let data_uri = format!("data:{};base64,{}", source.media_type, source.data);
                 content_parts.push(ContentPart::ImageUrl {
                     image_url: ImageUrlDetail {
                         url: data_uri,
@@ -192,7 +188,9 @@ fn translate_assistant_message(blocks: &[ContentBlock]) -> Vec<ChatMessage> {
                     },
                 });
             }
-            ContentBlock::Thinking { .. } | ContentBlock::Image { .. } | ContentBlock::ToolResult { .. } => {}
+            ContentBlock::Thinking { .. }
+            | ContentBlock::Image { .. }
+            | ContentBlock::ToolResult { .. } => {}
         }
     }
 
@@ -302,10 +300,7 @@ mod tests {
         };
 
         let mut model_map = HashMap::new();
-        model_map.insert(
-            "claude-sonnet-4-20250514".to_string(),
-            "gpt-4o".to_string(),
-        );
+        model_map.insert("claude-sonnet-4-20250514".to_string(), "gpt-4o".to_string());
 
         let result = anthropic_to_openai(&req, &model_map);
 

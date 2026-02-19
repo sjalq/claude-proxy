@@ -1,3 +1,8 @@
+//! Configuration loading and validation.
+//!
+//! Reads a TOML config file with provider settings, model mappings, and parameter
+//! filters. API keys are resolved from environment variables at runtime.
+
 use crate::error::{ProxyError, Result};
 use crate::providers::ProviderPreset;
 use serde::{Deserialize, Serialize};
@@ -54,7 +59,11 @@ impl ProxyConfig {
     /// Load config from a TOML file, falling back to defaults.
     pub fn load(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path).map_err(|e| {
-            ProxyError::config(format!("Failed to read config file {}: {}", path.display(), e))
+            ProxyError::config(format!(
+                "Failed to read config file {}: {}",
+                path.display(),
+                e
+            ))
         })?;
         let config: Self = toml::from_str(&content)?;
         Ok(config)
@@ -143,11 +152,7 @@ fn config_search_paths() -> Vec<PathBuf> {
         }
     } else {
         if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-            paths.push(
-                PathBuf::from(xdg)
-                    .join("claude-proxy")
-                    .join("config.toml"),
-            );
+            paths.push(PathBuf::from(xdg).join("claude-proxy").join("config.toml"));
         }
         if let Some(home) = dirs_path() {
             paths.push(

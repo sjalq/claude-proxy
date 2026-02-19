@@ -2,8 +2,14 @@
 name = "claude-proxy"
 version = "0.1.0"
 edition = "2021"
-description = "Universal API proxy for Claude Code - route through any LLM provider"
+rust-version = "1.75"
+description = "Universal API proxy for Claude Code — route through any LLM provider"
 license = "MIT"
+repository = "https://github.com/sjalq/claude-proxy"
+homepage = "https://github.com/sjalq/claude-proxy"
+readme = "README.md"
+keywords = ["claude", "proxy", "llm", "openai", "anthropic"]
+categories = ["command-line-utilities", "web-programming::http-server"]
 
 [lib]
 name = "claude_proxy"
@@ -30,8 +36,8 @@ thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
-async-stream = "0.3.6"
-anyhow = "1.0.101"
+async-stream = "0.3"
+anyhow = "1"
 
 [dev-dependencies]
 tokio-test = "0.4"

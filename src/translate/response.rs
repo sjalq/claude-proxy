@@ -1,6 +1,9 @@
-use super::anthropic_types::{
-    ErrorResponse, MessagesResponse, ResponseContentBlock, Usage,
-};
+//! Translate OpenAI Chat Completions responses into Anthropic Messages API responses.
+//!
+//! Handles text content, tool calls, finish reason mapping, usage statistics,
+//! and error translation. Supports `reasoning_content` from reasoning models.
+
+use super::anthropic_types::{ErrorResponse, MessagesResponse, ResponseContentBlock, Usage};
 use super::openai_types::{ChatCompletionResponse, ChatErrorResponse};
 
 /// Translate an OpenAI Chat Completion response into an Anthropic Messages response.
@@ -21,10 +24,17 @@ pub fn openai_to_anthropic(
             .content
             .as_deref()
             .filter(|s| !s.is_empty())
-            .or_else(|| c.message.reasoning_content.as_deref().filter(|s| !s.is_empty()));
+            .or_else(|| {
+                c.message
+                    .reasoning_content
+                    .as_deref()
+                    .filter(|s| !s.is_empty())
+            });
 
         if let Some(text) = text {
-            content.push(ResponseContentBlock::Text { text: text.to_string() });
+            content.push(ResponseContentBlock::Text {
+                text: text.to_string(),
+            });
         }
 
         if let Some(ref tool_calls) = c.message.tool_calls {
@@ -103,7 +113,10 @@ mod tests {
     use super::*;
     use crate::translate::openai_types::*;
 
-    fn make_response(content: Option<String>, finish_reason: Option<String>) -> ChatCompletionResponse {
+    fn make_response(
+        content: Option<String>,
+        finish_reason: Option<String>,
+    ) -> ChatCompletionResponse {
         ChatCompletionResponse {
             id: "chatcmpl-abc123".to_string(),
             object: "chat.completion".to_string(),

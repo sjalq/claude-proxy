@@ -1,3 +1,5 @@
+//! Error types for the proxy.
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]
