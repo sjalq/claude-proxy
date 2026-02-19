@@ -25,6 +25,8 @@ pub struct ProviderConfig {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
     #[serde(default = "default_api_key_env")]
     pub api_key_env: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -126,9 +128,12 @@ impl ProxyConfig {
     /// # Errors
     /// Returns `ProxyError::Config` if the environment variable is not set.
     pub fn resolve_api_key(&self) -> Result<String> {
+        if let Some(ref key) = self.provider.api_key {
+            return Ok(key.clone());
+        }
         std::env::var(&self.provider.api_key_env).map_err(|_| {
             ProxyError::config(format!(
-                "Environment variable '{}' not set. Set it with your provider API key.",
+                "Environment variable '{}' not set (and no explicit api_key provided).",
                 self.provider.api_key_env
             ))
         })
@@ -229,6 +234,7 @@ drop = ["betas"]
             provider: ProviderConfig {
                 name: "openai".to_string(),
                 base_url: None,
+                api_key: None,
                 api_key_env: "OPENAI_API_KEY".to_string(),
                 format: None,
             },
@@ -247,6 +253,7 @@ drop = ["betas"]
             provider: ProviderConfig {
                 name: "custom".to_string(),
                 base_url: Some("https://my-server.com/v1".to_string()),
+                api_key: None,
                 api_key_env: "MY_KEY".to_string(),
                 format: None,
             },

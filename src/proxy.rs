@@ -68,19 +68,13 @@ pub async fn proxy_non_streaming(
     let body = serde_json::to_vec(&openai_req)
         .map_err(|e| ProxyError::translation(format!("Failed to serialize request: {e}")))?;
 
-    let response = send_with_retry(
-        client,
-        &url,
-        &api_key,
-        &body,
-        logger,
-    )
-    .await?;
+    let response = send_with_retry(client, &url, &api_key, &body, logger).await?;
 
     let status = response.status().as_u16();
-    let resp_body = response.text().await.map_err(|e| {
-        ProxyError::provider(format!("Failed to read response body: {e}"))
-    })?;
+    let resp_body = response
+        .text()
+        .await
+        .map_err(|e| ProxyError::provider(format!("Failed to read response body: {e}")))?;
 
     logger.debug(
         "proxy",
@@ -102,14 +96,13 @@ pub async fn proxy_non_streaming(
         return Ok(ProxyResult::Error(anthropic_err, status));
     }
 
-    let openai_resp: ChatCompletionResponse =
-        serde_json::from_str(&resp_body).map_err(|e| {
-            ProxyError::translation(format!(
-                "Failed to parse provider response: {}. Body: {}",
-                e,
-                truncate(&resp_body, 300)
-            ))
-        })?;
+    let openai_resp: ChatCompletionResponse = serde_json::from_str(&resp_body).map_err(|e| {
+        ProxyError::translation(format!(
+            "Failed to parse provider response: {}. Body: {}",
+            e,
+            truncate(&resp_body, 300)
+        ))
+    })?;
 
     let anthropic_resp = openai_to_anthropic(&openai_resp, &req.model)?;
 
@@ -163,7 +156,11 @@ pub async fn proxy_streaming(
         let body = response.text().await.unwrap_or_default();
         logger.warn(
             "proxy",
-            format!("Streaming error status={}: {}", status, truncate(&body, 300)),
+            format!(
+                "Streaming error status={}: {}",
+                status,
+                truncate(&body, 300)
+            ),
         );
 
         let error_event = if let Ok(err) = serde_json::from_str::<ChatErrorResponse>(&body) {

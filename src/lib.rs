@@ -45,6 +45,7 @@
 pub mod config;
 pub mod error;
 pub mod logging;
+pub mod models;
 pub mod providers;
 pub mod proxy;
 pub mod server;

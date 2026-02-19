@@ -178,7 +178,7 @@ async fn handle_health() -> Json<serde_json::Value> {
 }
 
 async fn handle_models(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
-    let models: Vec<serde_json::Value> = state
+    let mut models: Vec<serde_json::Value> = state
         .config
         .models
         .keys()
@@ -186,10 +186,25 @@ async fn handle_models(State(state): State<Arc<AppState>>) -> Json<serde_json::V
             serde_json::json!({
                 "id": name,
                 "object": "model",
-                "owned_by": state.config.provider.name,
+                "owned_by": state.config.provider.name.clone(),
             })
         })
         .collect();
+
+    // Fetch upstream models and append them to the list so Claude Code can see all available models.
+    if let Ok(provider_models) =
+        crate::models::fetch_provider_models(&state.config, &state.client).await
+    {
+        for model in provider_models {
+            if !state.config.models.contains_key(&model) {
+                models.push(serde_json::json!({
+                    "id": model,
+                    "object": "model",
+                    "owned_by": state.config.provider.name.clone(),
+                }));
+            }
+        }
+    }
 
     Json(serde_json::json!({ "data": models, "object": "list" }))
 }
