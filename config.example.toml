@@ -1,0 +1,32 @@
+# Claude Proxy Configuration
+# Copy to ~/.config/claude-proxy/config.toml and edit
+
+port = 4222
+
+[provider]
+# Built-in presets: "openai", "openrouter", "fireworks", "grok", "together", "groq", "anthropic"
+# Use "custom" for unlisted providers
+name = "fireworks"
+
+# Override base URL (optional - presets have defaults)
+# base_url = "https://api.fireworks.ai/inference/v1"
+
+# Environment variable containing the API key
+api_key_env = "FIREWORKS_API_KEY"
+
+# API format: "openai" (most providers) or "anthropic" (direct passthrough)
+# format = "openai"
+
+[models]
+# Map Claude model names (what Claude Code requests) to provider model names
+# If a model isn't listed here, it passes through as-is
+"claude-sonnet-4-20250514" = "accounts/fireworks/models/kimi-k2p5"
+"claude-opus-4-20250514" = "accounts/fireworks/models/kimi-k2p5"
+"claude-opus-4-5-20251101" = "accounts/fireworks/models/kimi-k2p5"
+"claude-haiku-4-5-20251001" = "accounts/fireworks/models/kimi-k2-instruct-0905"
+"claude-3-5-sonnet-20241022" = "accounts/fireworks/models/kimi-k2p5"
+"claude-3-5-haiku-20241022" = "accounts/fireworks/models/kimi-k2-instruct-0905"
+
+[params]
+# Parameters to drop from requests (Anthropic-specific params that other providers reject)
+drop = ["betas", "anthropic_beta", "anthropic-beta", "context_management", "reasoning_effort"]

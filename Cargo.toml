@@ -1,0 +1,38 @@
+[package]
+name = "claude-proxy"
+version = "0.1.0"
+edition = "2021"
+description = "Universal API proxy for Claude Code - route through any LLM provider"
+license = "MIT"
+
+[lib]
+name = "claude_proxy"
+path = "src/lib.rs"
+
+[[bin]]
+name = "claude-proxy"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.7", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["stream", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+futures = "0.3"
+tokio-stream = "0.1"
+bytes = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+async-stream = "0.3.6"
+anyhow = "1.0.101"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3"
